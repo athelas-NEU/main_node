@@ -8,6 +8,7 @@ Install dependencies.
 ```
 pip3 install empy
 pip3 install catkin_pkg
+pip3 install rospkg
 ```
 
 Create ROS workspace.
@@ -23,6 +24,12 @@ Clone this repo and the pose_estimation repo.
 cd ~/catkin_ws/src
 git clone https://github.com/athelas-NEU/main_node.git
 git clone https://github.com/athelas-NEU/pose_estimation.git
+```
+
+Make scripts executable.
+```
+chmod +x ~/catkin_ws/src/main_node/scripts/get_keypoint_client.py
+chmod +x ~/catkin_ws/src/pose_estimation/scripts/get_keypoint_server.py
 ```
 
 Build files.
