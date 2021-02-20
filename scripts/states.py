@@ -79,11 +79,12 @@ class PositionArmZ(State):
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
 		self.pub_z = rospy.Publisher('/arm_control/z', Int32, queue_size=10)
 		self.positioned = False
-		rospy.Subscriber("/distance_sensor", Float32, self.__distance_callback)
+		self.sub = rospy.Subscriber("/distance_sensor", Float32, self.__distance_callback)
 
 	def execute(self):
 		super().execute()
 		if self.positioned:
+			self.sub.unregister()
 			return BioData(self.sensor)
 		else:
 			# TODO: return self
@@ -106,11 +107,12 @@ class BioData(State):
 		rospy.wait_for_service('get_keypoint')
 		topic = self.BIOSENSOR_MAP[self.sensor]["distance"]
 		self.start_time = time.time()
-		rospy.Subscriber(f"/biosensors/{topic}", Float32, self.__bio_callback)
+		self.sub = rospy.Subscriber(f"/biosensors/{topic}", Float32, self.__bio_callback)
 
 	def execute(self):
 		super().execute()
 		if time.time() - self.start_time > 15:
+			self.sub.unregister()
 			return Idle()
 		else:
 			return self
