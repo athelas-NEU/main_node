@@ -1,6 +1,7 @@
 from main_node.srv import GetKeypoint
 from std_msgs.msg import Int32, Float32
 import rospy
+import time
 
 
 class State(object):
@@ -83,13 +84,38 @@ class PositionArmZ(State):
 	def execute(self):
 		super().execute()
 		if self.positioned:
-			return Idle()
+			return BioData(self.sensor)
 		else:
 			# TODO: return self
-			return Idle()
+			return BioData(self.sensor)
 	
 	def __distance_callback(self, data):
 		print(data.distance)
 		# TODO: decide if positioned
 		self.pub_z.publish(data.distance - self.distance)
 		self.positioned = True
+
+class BioData(State):
+	"""
+	Collect bio data for 15 seconds.
+	"""
+
+	def __init__(self, sensor):
+		super().__init__()
+		self.sensor = sensor
+		rospy.wait_for_service('get_keypoint')
+		topic = self.BIOSENSOR_MAP[self.sensor]["distance"]
+		self.start_time = time.time()
+		rospy.Subscriber(f"/biosensors/{topic}", Float32, self.__bio_callback)
+
+	def execute(self):
+		super().execute()
+		if time.time() - self.start_time > 15:
+			return Idle()
+		else:
+			return self
+	
+	def __bio_callback(self, data):
+		# TODO: name of data
+		print(data.data)
+		
