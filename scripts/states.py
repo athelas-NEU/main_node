@@ -1,5 +1,5 @@
 from main_node.srv import GetKeypoint
-from std_msgs.msg import Int32, Float32
+from std_msgs.msg import Int32, Float32, Bool
 import rospy
 import time
 
@@ -75,7 +75,6 @@ class PositionArmZ(State):
 	def __init__(self, sensor):
 		super().__init__()
 		self.sensor = sensor
-		rospy.wait_for_service('get_keypoint')
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
 		self.pub_z = rospy.Publisher('/arm_control/z', Int32, queue_size=10)
 		self.positioned = False
@@ -93,7 +92,7 @@ class PositionArmZ(State):
 	def __distance_callback(self, data):
 		print(data.distance)
 		# TODO: decide if positioned
-		self.pub_z.publish(data.distance - self.distance)
+		self.pub_z.publish(data - self.distance)
 		self.positioned = True
 
 class BioData(State):
@@ -113,11 +112,14 @@ class BioData(State):
 		super().execute()
 		if time.time() - self.start_time > 15:
 			self.sub.unregister()
+			# Tell arm to reset
+			pub = rospy.Publisher('/arm_command/reset', Bool, queue_size=10)
+			pub.publish(True)
 			return Idle()
 		else:
 			return self
 	
 	def __bio_callback(self, data):
 		# TODO: name of data
-		print(data.data)
+		print(data)
 		
