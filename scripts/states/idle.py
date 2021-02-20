@@ -1,6 +1,5 @@
-import scripts.states.state import State
-import scripts.states.position_arm import PositionArmXY
-import scripts.main_node
+from states.state import State
+# import scripts.states.position_arm import PositionArmXY
 
 class Idle(State):
   """
@@ -10,5 +9,8 @@ class Idle(State):
   def execute(self):
     super().execute()
 
-    biosensor = input("Enter the biosensor name: ") 
-    main_node.state = PositionArmXY(biosensor)
+    biosensor = input("Enter the biosensor name: ")
+    print(biosensor)
+    return self
+    # return PositionArmXY(biosensor)
+

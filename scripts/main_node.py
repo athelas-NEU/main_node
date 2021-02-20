@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 
 import rospy
+import time
 
-from scripts.states.idle import Idle
+from states.idle import Idle
 
 
 def main_loop():
   # Create ROS node
   rospy.init_node('main_node', anonymous=True)
-  global state
   state = Idle()
-  while(1) {
-    state.execute()
-    sleep(0.5)
-  }
+  while(1):
+    state = state.execute()
+    time.sleep(0.5)
 
 
 if __name__ == "__main__":

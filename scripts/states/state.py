@@ -5,7 +5,7 @@ class State(object):
   """
 
   def __init__(self):
-    print f"Processing current state: {str(self)}"
+    print(f"Processing current state: {str(self)}")
 
   def execute(self):
     pass
