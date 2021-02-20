@@ -37,3 +37,12 @@ Build files.
 cd ~/catkin_ws
 catkin_make
 ```
+
+# Run 
+In separate terminals run:
+```
+roscore
+rosrun pose_estimation get_keypoint_service.py
+rosrun main_node main_node_run.py
+rosrun rosserial_python serial_node.py /dev/ttyUSB0
+```
