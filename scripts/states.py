@@ -1,5 +1,5 @@
 from main_node.srv import GetKeypoint
-from std_msgs.msg import Int32, Float32, Bool
+from std_msgs.msg import Int32, Float32, Bool, Int16
 import rospy
 import time
 
@@ -52,20 +52,29 @@ class PositionArmXY(State):
 		self.sensor = sensor
 		rospy.wait_for_service('get_keypoint')
 		self.location = self.BIOSENSOR_MAP[self.sensor]["keypoint"]
-		self.pub_x = rospy.Publisher('/arm_control/x', Int32, queue_size=10)
-		self.pub_y = rospy.Publisher('/arm_control/y', Int32, queue_size=10)
+		self.pub_x = rospy.Publisher('arm_control/x', Int16, queue_size=10)
+		self.pub_y = rospy.Publisher('arm_control/y', Int16, queue_size=10)
 
 	def execute(self):
 		super().execute()
 		get_keypoint = rospy.ServiceProxy('get_keypoint', GetKeypoint)
-		resp1 = get_keypoint(self.location)
+		resp = get_keypoint(self.location)
 		# TODO: convert image coordinates to centimeters
-		self.pub_x.publish(resp1.x)
-		self.pub_y.publish(resp1.y)
-		print(resp1.x)
-		print(resp1.y)
+		if resp.x == -999:
+			pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
+			pub_reset.publish(True)
+			time.sleep(2)
+			return self
+		self.pub_x.publish(int(resp.x / 20))
+		self.pub_y.publish(-1 * int(resp.y / 20))
+		print(resp.x)
+		print(-1 * resp.y)
+		if abs(resp.x) < 15 and abs(resp.y) < 15:
+			print("centered")
+			return PositionArmZ(self.sensor)
 		# TODO: only move to next state once centered
-		return PositionArmZ(self.sensor)
+		time.sleep(1)
+		return self
 
 class PositionArmZ(State):
 	"""
@@ -76,7 +85,7 @@ class PositionArmZ(State):
 		super().__init__()
 		self.sensor = sensor
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
-		self.pub_z = rospy.Publisher('/arm_control/z', Int32, queue_size=10)
+		self.pub_z = rospy.Publisher('/arm_control/z', Int16, queue_size=10)
 		self.positioned = False
 		self.sub = rospy.Subscriber("/distance_sensor", Float32, self.__distance_callback)
 
@@ -104,7 +113,7 @@ class BioData(State):
 		super().__init__()
 		self.sensor = sensor
 		rospy.wait_for_service('get_keypoint')
-		topic = self.BIOSENSOR_MAP[self.sensor]["distance"]
+		topic = self.BIOSENSOR_MAP[self.sensor]["topic"]
 		self.start_time = time.time()
 		self.sub = rospy.Subscriber(f"/biosensors/{topic}", Float32, self.__bio_callback)
 
@@ -113,13 +122,14 @@ class BioData(State):
 		if time.time() - self.start_time > 15:
 			self.sub.unregister()
 			# Tell arm to reset
-			pub = rospy.Publisher('/arm_command/reset', Bool, queue_size=10)
-			pub.publish(True)
+			print("reseting arm")
+			pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
+			pub_reset.publish(True)
+			time.sleep(0.5)
 			return Idle()
 		else:
 			return self
 	
 	def __bio_callback(self, data):
-		# TODO: name of data
 		print(data)
 		
