@@ -3,7 +3,7 @@
 import rospy
 import time
 
-from states.idle import Idle
+from states import Idle
 
 
 def main_loop():
