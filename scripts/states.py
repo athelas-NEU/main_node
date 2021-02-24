@@ -65,11 +65,12 @@ class PositionArmXY(State):
 			pub_reset.publish(True)
 			time.sleep(2)
 			return self
-		self.pub_x.publish(int(resp.x / 20))
-		self.pub_y.publish(-1 * int(resp.y / 20))
+		# Range from -4 to 4
+		self.pub_x.publish(int(resp.x / 28))
+		self.pub_y.publish(-1 * int(resp.y / 28))
 		print(resp.x)
 		print(-1 * resp.y)
-		if abs(resp.x) < 15 and abs(resp.y) < 15:
+		if abs(resp.x) < 28 and abs(resp.y) < 28:
 			print("centered")
 			return PositionArmZ(self.sensor)
 		# TODO: only move to next state once centered
