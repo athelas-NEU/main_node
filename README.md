@@ -38,7 +38,14 @@ cd ~/catkin_ws
 catkin_make
 ```
 
-# Run 
+# Run as launch file
+
+```
+roslaunch main_node serial_dev.launch
+```
+
+
+# Run as seperate nodes
 In separate terminals run:
 ```
 roscore
