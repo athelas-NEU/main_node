@@ -37,6 +37,9 @@ class Idle(State):
 
 	def execute(self):
 		super().execute()
+		pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
+		pub_reset.publish(True)
+		pub_reset.publish(True)
 
 		biosensor = input("Enter the biosensor name: ")
 		print(biosensor)
@@ -54,6 +57,11 @@ class PositionArmXY(State):
 		self.location = self.BIOSENSOR_MAP[self.sensor]["keypoint"]
 		self.pub_x = rospy.Publisher('arm_control/x', Int16, queue_size=10)
 		self.pub_y = rospy.Publisher('arm_control/y', Int16, queue_size=10)
+		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
+		pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
+		pub_reset.publish(True)
+		pub_reset.publish(True)
+		time.sleep(2)
 
 	def execute(self):
 		super().execute()
@@ -61,17 +69,15 @@ class PositionArmXY(State):
 		resp = get_keypoint(self.location)
 		# TODO: convert image coordinates to centimeters
 		if resp.x == -999:
-			pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
-			pub_reset.publish(True)
-			time.sleep(2)
+			self.pub_z.publish(-1)
 			return self
-		print(resp.x)
+		print(-1 * resp.x)
 		print(-1 * resp.y)
 		if abs(resp.x) < 28 and abs(resp.y) < 28:
 			print("centered")
 			return PositionArmZ(self.sensor)
 		# Range from -4 to 4
-		self.pub_x.publish(int(resp.x / 28))
+		self.pub_x.publish(-1 * int(resp.x / 28))
 		self.pub_y.publish(-1 * int(resp.y / 28))
 		# TODO: only move to next state once centered
 		time.sleep(1)
@@ -104,12 +110,12 @@ class PositionArmZ(State):
 			return self
 	
 	def __distance_callback(self, data):
-		if time.time() - self.time > 2 and self.positioned is False:
+		if time.time() - self.time > 1 and self.positioned is False:
 			self.time = time.time()
 			print(f"Distance: {data.data} in")
-			if abs(data.data - self.distance) < 1:
+			if abs(data.data - self.distance) < 1.5:
 				self.positioned = True
-			elif data.data > 470 and self.sensor == "stethoscope":
+			elif data.data > 470:
 				print("close to chest")
 				self.positioned = True
 			else:
@@ -118,7 +124,7 @@ class PositionArmZ(State):
 	
 	def __pressure_callback(self, data):
 		if self.sensor == "stethoscope" and self.positioned is True:
-			if time.time() - self.time > 2:
+			if time.time() - self.time > 1:
 				self.time = time.time()
 				print(f"Pressure: {data.data}")
 				self.positioned_pressure = data.data > 4
@@ -142,6 +148,10 @@ class BioData(State):
 		if time.time() - self.start_time > 15:
 			self.sub.unregister()
 			# Tell arm to reset
+			print("go back")
+			pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
+			pub_z.publish(-10)
+			time.sleep(0.5)
 			print("reseting arm")
 			pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
 			pub_reset.publish(True)
