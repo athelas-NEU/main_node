@@ -11,8 +11,8 @@ class State(object):
 	BIOSENSOR_MAP = {
 		"pulse": {"keypoint": "hand", "topic": "pulseox/heart", "distance": 10},
 		"o2": {"keypoint": "hand", "topic": "pulseox/o2", "distance": 10},
-		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 10},
-		"stethoscope": {"keypoint": "chest", "topic": "stethoscope", "distance": 10},
+		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 1},
+		"stethoscope": {"keypoint": "chest", "topic": "stethoscope", "distance": 0},
 	}
 
 	def __init__(self):
@@ -86,24 +86,44 @@ class PositionArmZ(State):
 		super().__init__()
 		self.sensor = sensor
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
-		self.pub_z = rospy.Publisher('/arm_control/z', Int16, queue_size=10)
+		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
 		self.positioned = False
-		self.sub = rospy.Subscriber("/distance_sensor", Float32, self.__distance_callback)
+		self.positioned_pressure = False if self.sensor == "stethoscope" else True
+		self.sub_distance = rospy.Subscriber("distance", Float32, self.__distance_callback)
+		self.sub_pressure = rospy.Subscriber("pressure", Int16, self.__pressure_callback)
+		self.time = time.time()
 
 	def execute(self):
 		super().execute()
-		if self.positioned:
-			self.sub.unregister()
+		if self.positioned and self.positioned_pressure:
+			self.sub_distance.unregister()
+			self.sub_pressure.unregister()
 			return BioData(self.sensor)
 		else:
 			# TODO: return self
-			return BioData(self.sensor)
+			return self
 	
 	def __distance_callback(self, data):
-		print(data.distance)
-		# TODO: decide if positioned
-		self.pub_z.publish(data - self.distance)
-		self.positioned = True
+		if time.time() - self.time > 2 and self.positioned is False:
+			self.time = time.time()
+			print(f"Distance: {data.data} in")
+			if abs(data.data - self.distance) < 1:
+				self.positioned = True
+			elif data.data > 470 and self.sensor == "stethoscope":
+				print("close to chest")
+				self.positioned = True
+			else:
+				self.pub_z.publish(1)
+				self.positioned = False
+	
+	def __pressure_callback(self, data):
+		if self.sensor == "stethoscope" and self.positioned is True:
+			if time.time() - self.time > 2:
+				self.time = time.time()
+				print(f"Pressure: {data.data}")
+				self.positioned_pressure = data.data > 4
+				if not self.positioned_pressure:
+					self.pub_z.publish(1)
 
 class BioData(State):
 	"""
@@ -113,7 +133,6 @@ class BioData(State):
 	def __init__(self, sensor):
 		super().__init__()
 		self.sensor = sensor
-		rospy.wait_for_service('get_keypoint')
 		topic = self.BIOSENSOR_MAP[self.sensor]["topic"]
 		self.start_time = time.time()
 		self.sub = rospy.Subscriber(f"/biosensors/{topic}", Float32, self.__bio_callback)
