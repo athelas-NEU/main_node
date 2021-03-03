@@ -127,7 +127,7 @@ class PositionArmZ(State):
 			if time.time() - self.time > 1:
 				self.time = time.time()
 				print(f"Pressure: {data.data}")
-				self.positioned_pressure = data.data > 4
+				self.positioned_pressure = data.data > 12
 				if not self.positioned_pressure:
 					self.pub_z.publish(1)
 
@@ -141,7 +141,7 @@ class BioData(State):
 		self.sensor = sensor
 		topic = self.BIOSENSOR_MAP[self.sensor]["topic"]
 		self.start_time = time.time()
-		self.sub = rospy.Subscriber(f"/biosensors/{topic}", Float32, self.__bio_callback)
+		self.sub = rospy.Subscriber(f"{topic}", Float32, self.__bio_callback)
 
 	def execute(self):
 		super().execute()
@@ -150,7 +150,7 @@ class BioData(State):
 			# Tell arm to reset
 			print("go back")
 			pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
-			pub_z.publish(-10)
+			pub_z.publish(-5)
 			time.sleep(0.5)
 			print("reseting arm")
 			pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
@@ -161,5 +161,5 @@ class BioData(State):
 			return self
 	
 	def __bio_callback(self, data):
-		print(data)
+		print(data.data + 12)
 		
