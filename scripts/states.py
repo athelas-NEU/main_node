@@ -22,7 +22,7 @@ class State(object):
 		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 20, "sample_rate":100.0, "sample_interval":30},
 		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 20, "sample_rate":100.0, "sample_interval":30},
 		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 1, "sample_rate":100.0, "sample_interval":30},
-		"stethoscope": {"keypoint": "chest", "topic": "/biosensor/stethoscope", "distance": 0,"sample_rate": 44100.0, "sample_interval":30},
+		"stethoscope": {"keypoint": "chest", "topic": "/biosensors/stethoscope", "distance": 0,"sample_rate": 44100.0, "sample_interval":30},
 	}
 
 	def __init__(self):
@@ -51,11 +51,11 @@ class Idle(State):
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 
-		# biosensor = input("Enter the biosensor name: ")
-		biosensor = "stethoscope"
-		print(biosensor)
-		print("DEBUG: going to biosensor state")
-		return BioData(biosensor)
+		biosensor = input("Enter the biosensor name: ")
+		# biosensor = "stethoscope"
+		# print(biosensor)
+		# print("DEBUG: going to biosensor state")
+		return PositionArmXY(biosensor)
 
 class PositionArmXY(State):
 	"""
