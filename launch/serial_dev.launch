@@ -1,11 +1,13 @@
 <launch>
 
-    <node pkg="pose_estimation" name="keypoint_srv" type="get_keypoint_service.py"/>
+    <!-- <node pkg="pose_estimation" name="keypoint_srv" type="get_keypoint_service.py"/> -->
 
-    <node pkg="main_node" name="main_node" type="main_node_run.py"/>
+    <!-- <node pkg="main_node" name="main_node" type="main_node_run.py"/> -->
     
     <node pkg="rosserial_python" name="serial_USB0" type="serial_node.py" args="/dev/ttyUSB0"/>
 
     <node pkg="rosserial_python" name="serial_USB1" type="serial_node.py" args="/dev/ttyUSB1"/>
+
+    <node pkg="rosserial_python" name="serial_ACM0" type="serial_node.py" args="/dev/ttyACM0"/>
 
 </launch>

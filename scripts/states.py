@@ -9,8 +9,8 @@ class State(object):
 	State parent class.
 	"""
 	BIOSENSOR_MAP = {
-		"pulse": {"keypoint": "hand", "topic": "pulseox/heart", "distance": 10},
-		"o2": {"keypoint": "hand", "topic": "pulseox/o2", "distance": 10},
+		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 20},
+		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 20},
 		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 1},
 		"stethoscope": {"keypoint": "chest", "topic": "stethoscope", "distance": 0},
 	}
@@ -75,6 +75,8 @@ class PositionArmXY(State):
 		print(-1 * resp.y)
 		if abs(resp.x) < 28 and abs(resp.y) < 28:
 			print("centered")
+			if self.location == "hand":
+				self.pub_y(-10)
 			return PositionArmZ(self.sensor)
 		# Range from -4 to 4
 		self.pub_x.publish(-1 * int(resp.x / 28))
@@ -113,7 +115,7 @@ class PositionArmZ(State):
 		if time.time() - self.time > 1 and self.positioned is False:
 			self.time = time.time()
 			print(f"Distance: {data.data} in")
-			if abs(data.data - self.distance) < 1.5:
+			if data.data <= self.distance:
 				self.positioned = True
 			elif data.data > 470:
 				print("close to chest")
@@ -161,5 +163,5 @@ class BioData(State):
 			return self
 	
 	def __bio_callback(self, data):
-		print(data.data + 12)
+		print(data.data)
 		
