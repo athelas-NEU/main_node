@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 from main_node.srv import GetKeypoint
+from main_node.msg import biodatat
 from std_msgs.msg import Int32, Float32, Bool, Int16
-from main_node.msg import biodata_array
 import time
 
 import queue
@@ -14,19 +14,15 @@ import rospy
 from rospy_tutorials.msg import Floats
 from rospy.numpy_msg import numpy_msg
 
-import sounddevice as sd
-
-
-
 class State(object):
 	"""
 	State parent class.
 	"""
 	BIOSENSOR_MAP = {
-		"pulse": {"keypoint": "hand", "topic": "pulseox/heart", "distance": 10, "samplerate":100.0},
-		"o2": {"keypoint": "hand", "topic": "pulseox/o2", "distance": 10, "samplerate":100.0},
-		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 10, "samplerate":100.0},
-		"stethoscope": {"keypoint": "chest", "topic": "stethoscope", "distance": 10,"samplerate": 44100.0},
+		"pulse": {"keypoint": "hand", "topic": "pulseox/heart", "distance": 10, "sample_rate":100.0, "sample_interval":30},
+		"o2": {"keypoint": "hand", "topic": "pulseox/o2", "distance": 10, "sample_rate":100.0, "sample_interval":30},
+		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 10, "sample_rate":100.0, "sample_interval":30},
+		"stethoscope": {"keypoint": "chest", "topic": "stethoscope", "distance": 10,"sample_rate": 44100.0, "sample_interval":30},
 	}
 
 	def __init__(self):
@@ -122,30 +118,44 @@ class PositionArmZ(State):
 		self.positioned = True	
 
 
+####################################################
+### BioData State Plotting helper functions ########
+####################################################
 
-def plot_callback(frame, _state):
+def calculate_shift(data):
+	if type(data) == float:
+		return 1
+	else:
+		return len(data)
+
+def plot_callback(frame, state):
 	"""
 	Fields needed from BioData:
-		_state.data_q
-		_state.plotdata
-		_state.lines
+		state.data_q
+		state.plotdata
+		state.lines
 	"""
+
 	while True:
 		try:
-			data = _state.data_q.get_nowait()
+			data_np = np.asarray(state.data_q.get_nowait())
+			data = np.expand_dims(data_np, axis=1)
+			# print_list(data)
 		except queue.Empty:
 			break
-		shift = len(data)
-		plotdata = np.roll(_state.plotdata, -shift, axis=0)
+
+		shift = calculate_shift(data)
+		state.plotdata = np.roll(state.plotdata, -shift, axis=0)
 		 # Elements that roll beyond the last position are re-introduced
 
 		# npdata = np.asarray(data)[0:shift]
-		print("plot shape: ", data.shape)
+		state.plotdata[-shift:,:] = data
 
-		plotdata[-shift:,:] = data
-	for column, line in enumerate(_state.lines):
-		line.set_ydata(_state.plotdata[:,column])
-	return _state.lines
+	for column, line in enumerate(state.lines):
+		line.set_ydata(state.plotdata[:,column])
+
+	return state.lines
+
 
 class BioData(State):
 	"""
@@ -157,17 +167,24 @@ class BioData(State):
 		self.sensor = sensor
 		topic = self.BIOSENSOR_MAP[self.sensor]["topic"]
 
+		print("in init")
+
+		### Begin pylot setup
+
 		window = 1000
-		downsample = 1
-		interval = 30
-		samplerate = self.BIOSENSOR_MAP[self.sensor]["samplerate"]
-		length = int(window * samplerate / 1000 * downsample)
+		self.downsample = 1
+
+		 # this is update interval in miliseconds for plot (less than 30 crashes it :(
+		interval = self.BIOSENSOR_MAP[self.sensor]["sample_interval"]
+		samplerate = self.BIOSENSOR_MAP[self.sensor]["sample_rate"]
+		channels = [1]
+		length = int(window * samplerate / 1000 * self.downsample)
 
 		self.data_q = queue.Queue()
 
 		print("Sample Rate found: ", samplerate)
 
-		self.plotdata = np.zeros((length, 1))
+		self.plotdata = np.zeros((length,len(channels)))
 		print("plotdata shape found: ", self.plotdata.shape)
 		self.fig, self.ax = plt.subplots(figsize=(8,4))
 
@@ -178,13 +195,14 @@ class BioData(State):
 		self.ax.set_yticks([0])
 		self.ax.yaxis.grid(True)
 
-		### This should be changed to be modular for diff devices
+		self.start_time = time.time()
+		self.sub = rospy.Subscriber(f"biosensors/{topic}", biodatat, self.__bio_callback)
+
 		self.ani = FuncAnimation(self.fig, plot_callback, fargs=(self,), interval=interval, blit=True)
 		plt.show()
 
-		self.start_time = time.time()
-		self.sub = rospy.Subscriber(f"/biosensors/{topic}", Float32, self.__bio_callback)
 		print("finished state init")
+
 
 	def execute(self):
 		plt.show()
@@ -203,4 +221,5 @@ class BioData(State):
 			return self
 	
 	def __bio_callback(self, data):
-		self.data_q.put(data)
+		datalist = data.data
+		self.data_q.put(datalist)
