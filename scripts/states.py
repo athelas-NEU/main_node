@@ -2,7 +2,7 @@
 
 from main_node.srv import GetKeypoint
 from main_node.msg import biodatat
-from std_msgs.msg import Int32, Float32, Bool, Int16
+from std_msgs.msg import Int32, Float32, Bool, Int16, Float32MultiArray
 import time
 
 import queue
@@ -19,10 +19,17 @@ class State(object):
 	State parent class.
 	"""
 	BIOSENSOR_MAP = {
-		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 20, "sample_rate":100.0, "sample_interval":30},
-		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 20, "sample_rate":100.0, "sample_interval":30},
-		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 1, "sample_rate":100.0, "sample_interval":30},
-		"stethoscope": {"keypoint": "chest", "topic": "/biosensors/stethoscope", "distance": 0,"sample_rate": 44100.0, "sample_interval":30},
+		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 20, "sample_rate":20.0, "sample_interval":125},
+		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 20, "sample_rate":20.0, "sample_interval":125},
+		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 1, "sample_rate":20.0, "sample_interval":125},
+		"stethoscope": {"keypoint": "chest", "topic": "/biosensors/stethoscope", "distance": 0,"sample_rate": 44100.0, "sample_interval":200},
+	}
+
+	AXES_SETTINGS = {
+		"pulse": {"ylim": [40, 200]}
+		"o2": {"ylim": [90, 101]}
+		"temp": {"ylim": [70, 105]}
+		"stethoscope": {"ylim:" [-0.4, 0.4]}
 	}
 
 	def __init__(self):
@@ -51,10 +58,11 @@ class Idle(State):
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 
-		biosensor = input("Enter the biosensor name: ")
 		# biosensor = "stethoscope"
-		# print(biosensor)
 		# print("DEBUG: going to biosensor state")
+		# return BioData(biosensor)
+
+		biosensor = input("Enter the biosensor name: ")
 		return PositionArmXY(biosensor)
 
 class PositionArmXY(State):
@@ -199,68 +207,62 @@ class BioData(State):
 		self.start_time = time.time()
 
 		### Begin pylot setup
-		if "stethoscope" == self.sensor:
+		window = 1000
+		self.downsample = 1
 
-			window = 1000
-			self.downsample = 1
+		# this is update interval in miliseconds for plot (less than 30 crashes it :(
+		interval = self.BIOSENSOR_MAP[self.sensor]["sample_interval"]
+		samplerate = self.BIOSENSOR_MAP[self.sensor]["sample_rate"]
+		channels = [1]
+		length = int(window * samplerate / 1000 * self.downsample)
 
-			# this is update interval in miliseconds for plot (less than 30 crashes it :(
-			interval = self.BIOSENSOR_MAP[self.sensor]["sample_interval"]
-			samplerate = self.BIOSENSOR_MAP[self.sensor]["sample_rate"]
-			channels = [1]
-			length = int(window * samplerate / 1000 * self.downsample)
+		self.data_q = queue.Queue()
 
-			self.data_q = queue.Queue()
+		print("Sample Rate found: ", samplerate)
 
-			print("Sample Rate found: ", samplerate)
+		self.plotdata = np.zeros((length,len(channels)))
+		print("plotdata shape found: ", self.plotdata.shape)
+		self.fig, self.ax = plt.subplots(figsize=(8,4))
 
-			self.plotdata = np.zeros((length,len(channels)))
-			print("plotdata shape found: ", self.plotdata.shape)
-			self.fig, self.ax = plt.subplots(figsize=(8,4))
+		self.lines = self.ax.plot(self.plotdata, color = (0,1,0.29))
 
-			self.lines = self.ax.plot(self.plotdata,color = (0,1,0.29))
+		self.ax.set_title("Athelas: " + str(self.sensor) + " data")
+		self.ax.set_facecolor((0,0,0))
+		# self.ax.set_yticks([0])
 
-			self.ax.set_title("Athelas: " + str(self.sensor) + " data")
-			self.ax.set_facecolor((0,0,0))
-			self.ax.set_yticks([0])
-			self.ax.yaxis.grid(True)
+		self.ax.yaxis.grid(True)
+		self.ax.set_ylabel('Audio')
+		self.ax.tick_params(axis=u'y', which=u'major',length=0)
 
-			self.sub = rospy.Subscriber(f"{topic}", biodatat, self.__bio_callback)
+		if self.sensor != "stethoscope":
+			self.ax.set_ylim([65, 100])
 
-			self.ani = FuncAnimation(self.fig, plot_callback, fargs=(self,), interval=interval, blit=True)
-			plt.show()
+		self.sub = rospy.Subscriber(f"{topic}", Float32MultiArray, self.__bio_callback)
 
-			print("finished state init")
-		else:
-			self.sub = rospy.Subscriber(f"{topic}", Float32, self.__bio_callback)
+		self.ani = FuncAnimation(self.fig, plot_callback, fargs=(self,), interval=interval, blit=True)
+		plt.show() ## is blocking, state should end after
+
+		print("finished state init")
 
 	def execute(self):
 		super().execute()
-		if self.sensor == "stethoscope":
-			plt.show()
+		if time.time() - self.start_time > 15:
+			self.sub.unregister()
+			# Tell arm to reset
+			print("go back")
+			pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
+			pub_z.publish(-5)
+			time.sleep(0.5)
+			print("reseting arm")
+			pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
+			pub_reset.publish(True)
+			time.sleep(0.5)
+
+			return Idle()
 		else:
-
+			return self
 			
-			if time.time() - self.start_time > 15:
-				self.sub.unregister()
-				# Tell arm to reset
-				print("go back")
-				pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
-				pub_z.publish(-5)
-				time.sleep(0.5)
-				print("reseting arm")
-				pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
-				pub_reset.publish(True)
-				time.sleep(0.5)
-
-				return Idle()
-			else:
-				return self
 	
 	def __bio_callback(self, data):
-		if self.sensor == "stethoscope":
-			datalist = data.data
-			self.data_q.put(datalist)
-		else:
-			print(data.data)
-		
+		datalist = data.data
+		self.data_q.put(datalist)
