@@ -11,7 +11,10 @@ def main_loop():
   rospy.init_node('main_node', anonymous=True)
   state = Idle()
   while not rospy.is_shutdown():
-    state = state.execute()
+    try:
+      state = state.execute()
+    except rospy.exceptions.ROSInterruptException:
+      pass
     time.sleep(0.5)
 
 
