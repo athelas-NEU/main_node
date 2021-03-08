@@ -10,7 +10,7 @@ def main_loop():
   # Create ROS node
   rospy.init_node('main_node', anonymous=True)
   state = Idle()
-  while(1):
+  while not rospy.is_shutdown():
     state = state.execute()
     time.sleep(0.5)
 
