@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from main_node.srv import GetKeypoint
-from main_node.msg import biodatat
 from std_msgs.msg import Int32, Float32, Bool, Int16, Float32MultiArray
 import time
 
@@ -57,10 +56,6 @@ class Idle(State):
 		pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
 		pub_reset.publish(True)
 		pub_reset.publish(True)
-
-		# biosensor = "stethoscope"
-		# print("DEBUG: going to biosensor state")
-		# return BioData(biosensor)
 
 		biosensor = input("Enter the biosensor name: ")
 		return PositionArmXY(biosensor)
