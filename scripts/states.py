@@ -26,10 +26,10 @@ class State(object):
 	}
 
 	AXES_SETTINGS = {
-		"pulse": {"ylim": [40, 200]}
-		"o2": {"ylim": [90, 101]}
-		"temp": {"ylim": [70, 105]}
-		"stethoscope": {"ylim:" [-0.4, 0.4]}
+		"pulse": {"ylim": [40, 200], "color": (0.9, 0.5, 0.2), "ylabel": "Average Pulse"},
+		"o2": {"ylim": [90, 101], "color": (0, 0.1, 0.8), "ylabel": "O2 %"},
+		"temp": {"ylim": [70, 105], "color":(0.7, 0, 0), "ylabel": "Temperature"},
+		"stethoscope": {"ylim": [-0.4, 0.4], "color":(0, 1, 0.29), "ylabel": "Amplitude"}
 	}
 
 	def __init__(self):
@@ -96,7 +96,7 @@ class PositionArmXY(State):
 		if abs(resp.x) < 28 and abs(resp.y) < 28:
 			print("centered")
 			if self.location == "hand":
-				self.pub_y(-10)
+				self.pub_y.publish(-10)
 			return PositionArmZ(self.sensor)
 		# Range from -4 to 4
 		self.pub_x.publish(-1 * int(resp.x / 28))
@@ -190,6 +190,8 @@ def plot_callback(frame, state):
 	for column, line in enumerate(state.lines):
 		line.set_ydata(state.plotdata[:,column])
 
+	state.ax.autoscale_view(scalex=False, scaley=True)
+
 	return state.lines
 
 
@@ -205,6 +207,7 @@ class BioData(State):
 
 		print("in init")
 		self.start_time = time.time()
+		self.sub = rospy.Subscriber(f"{topic}", Float32MultiArray, self.__bio_callback)
 
 		### Begin pylot setup
 		window = 1000
@@ -224,20 +227,16 @@ class BioData(State):
 		print("plotdata shape found: ", self.plotdata.shape)
 		self.fig, self.ax = plt.subplots(figsize=(8,4))
 
-		self.lines = self.ax.plot(self.plotdata, color = (0,1,0.29))
+		self.lines = self.ax.plot(self.plotdata, color = self.AXES_SETTINGS[self.sensor]["color"])
 
 		self.ax.set_title("Athelas: " + str(self.sensor) + " data")
+
 		self.ax.set_facecolor((0,0,0))
 		# self.ax.set_yticks([0])
-
-		self.ax.yaxis.grid(True)
-		self.ax.set_ylabel('Audio')
+		self.ax.set_ylabel(self.AXES_SETTINGS[self.sensor]["ylabel"])
 		self.ax.tick_params(axis=u'y', which=u'major',length=0)
 
-		if self.sensor != "stethoscope":
-			self.ax.set_ylim([65, 100])
-
-		self.sub = rospy.Subscriber(f"{topic}", Float32MultiArray, self.__bio_callback)
+		self.ax.set_ylim(self.AXES_SETTINGS[self.sensor]["ylim"])
 
 		self.ani = FuncAnimation(self.fig, plot_callback, fargs=(self,), interval=interval, blit=True)
 		plt.show() ## is blocking, state should end after
@@ -248,6 +247,7 @@ class BioData(State):
 		super().execute()
 		if time.time() - self.start_time > 15:
 			self.sub.unregister()
+			plt.close(self.fig)
 			# Tell arm to reset
 			print("go back")
 			pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
