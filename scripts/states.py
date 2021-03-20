@@ -33,6 +33,8 @@ class State(object):
 
 	def __init__(self):
 		print(f"Current state: {str(self)}")
+		pub_state = rospy.Publisher('current_state', String, queue_size=10)
+		pub_state.publish(str(self))
 
 	def execute(self):
 		pass
