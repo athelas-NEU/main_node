@@ -13,6 +13,9 @@ import rospy
 from rospy_tutorials.msg import Floats
 from rospy.numpy_msg import numpy_msg
 
+class SafetyException(Exception):
+	pass
+
 class State(object):
 	"""
 	State parent class.
@@ -32,9 +35,13 @@ class State(object):
 	}
 
 	def __init__(self):
+		self.stop = False
 		print(f"Current state: {str(self)}")
 
 	def execute(self):
+		if self.stop:
+			self.stop = False
+			raise SafetyException
 		pass
 
 	def __repr__(self):
@@ -45,6 +52,19 @@ class State(object):
 		Returns the name of the State.
 		"""
 		return self.__class__.__name__
+	
+	def start_safety_monitoring(self):
+		self.sub_distance = rospy.Subscriber("distance", Float32, self.__safety_callback)
+
+	def stop_safety_monitoring(self):
+		self.sub_distance.unregister()
+
+	def __safety_callback(self, data):
+		if data.data > 470 or data.data < 2:
+			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+			pub_stop.publish(True)
+			self.stop = True 
+
 
 class Idle(State):
 	"""
@@ -77,6 +97,7 @@ class PositionArmXY(State):
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 		time.sleep(2)
+		self.start_safety_monitoring()
 
 	def execute(self):
 		super().execute()
@@ -115,6 +136,7 @@ class PositionArmZ(State):
 		self.sub_distance = rospy.Subscriber("distance", Float32, self.__distance_callback)
 		self.sub_pressure = rospy.Subscriber("pressure", Int16, self.__pressure_callback)
 		self.time = time.time()
+		self.stop_safety_monitoring()
 
 	def execute(self):
 		super().execute()
