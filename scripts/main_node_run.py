@@ -3,7 +3,7 @@
 import rospy
 import time
 
-from states import Idle, SafetyException
+from states import Idle, SafetyException, Stop
 
 
 def main_loop():
@@ -16,7 +16,7 @@ def main_loop():
     except rospy.exceptions.ROSInterruptException:
       pass
     except SafetyException:
-      state = Idle()
+      state = Stop()
     time.sleep(0.5)
 
 
