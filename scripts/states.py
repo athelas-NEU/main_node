@@ -283,3 +283,20 @@ class BioData(State):
 	def __bio_callback(self, data):
 		datalist = data.data
 		self.data_q.put(datalist)
+
+class Stop(State):
+
+	def __init__(self):
+		super().__init__()
+		self.reset = False
+		self.sub_reset = rospy.Subscriber("arm_control/reset", Bool, self.__reset_callback)
+
+	def execute(self):
+		super().execute()
+		if self.reset:
+			return Idle()
+		return self
+	
+	def __reset_callback(self, data):
+		if data.data == True:
+			self.reset = True
