@@ -21,9 +21,9 @@ class State(object):
 	State parent class.
 	"""
 	BIOSENSOR_MAP = {
-		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 20, "sample_rate":20.0, "sample_interval":125},
-		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 20, "sample_rate":20.0, "sample_interval":125},
-		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 1, "sample_rate":20.0, "sample_interval":125},
+		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 10, "sample_rate":20.0, "sample_interval":125},
+		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 10, "sample_rate":20.0, "sample_interval":125},
+		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 4, "sample_rate":20.0, "sample_interval":125},
 		"stethoscope": {"keypoint": "chest", "topic": "/biosensors/stethoscope", "distance": 0,"sample_rate": 44100.0, "sample_interval":200},
 	}
 
@@ -103,6 +103,7 @@ class PositionArmXY(State):
 		super().execute()
 		get_keypoint = rospy.ServiceProxy('get_keypoint', GetKeypoint)
 		resp = get_keypoint(self.location)
+		print(f"Location of {self.location} is {resp.x},{resp.y}")
 		# If the keypoint is not found, move backwards
 		if resp.x == -999:
 			self.pub_z.publish(-10)
@@ -116,19 +117,21 @@ class PositionArmXY(State):
 		# If centered, transition states
 		if abs(resp.x) < 28 and abs(resp.y) < 28:
 			print("centered")
-			if self.location == "hand":
-				self.pub_y.publish(-10)
+			if self.location == "forehead":
+				self.pub_y.publish(20)
 			return PositionArmZ(self.sensor)
 
 		# Only move x if x is not centered
 		if abs(resp.x) >= 28:
-			self.pub_x.publish(-1 * int(resp.x /5))
+			if resp.x < 0:
+				self.pub_x.publish(5)
+			elif resp.x > 0:
+				self.pub_x.publish(-5)
 			time.sleep(0.5)
 		
 		# Move y
 		self.pub_y.publish(-1 * int(resp.y/5))
 		
-		time.sleep(1)
 		return self
 
 class PositionArmZ(State):
@@ -142,6 +145,7 @@ class PositionArmZ(State):
 		self.sensor = sensor
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
 		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
+		self.pub_y = rospy.Publisher('arm_control/y', Int16, queue_size=10)
 		self.positioned = False
 		self.positioned_pressure = False if self.sensor == "stethoscope" else True
 		self.sub_distance = rospy.Subscriber("distance", Float32, self.__distance_callback)
@@ -154,13 +158,17 @@ class PositionArmZ(State):
 		if self.positioned and self.positioned_pressure:
 			self.sub_distance.unregister()
 			self.sub_pressure.unregister()
+			if self.sensor == "pulse" or self.sensor == "o2":
+				print("going down")
+				self.pub_y.publish(-100)
+				time.sleep(3)
 			return BioData(self.sensor)
 		else:
 			# TODO: return self
 			return self
 	
 	def __distance_callback(self, data):
-		if time.time() - self.time > 4 and self.positioned is False:
+		if time.time() - self.time > 3 and self.positioned is False:
 			self.time = time.time()
 			print(f"Distance: {data.data} in")
 			if data.data <= self.distance:
@@ -169,16 +177,18 @@ class PositionArmZ(State):
 				print("close to chest")
 				self.positioned = True
 			else:
+				print("going forward: distance")
 				self.pub_z.publish(40)
 				self.positioned = False	
 	
 	def __pressure_callback(self, data):
 		if self.sensor == "stethoscope" and self.positioned is True:
-			if time.time() - self.time > 4:
+			if time.time() - self.time > 3:
 				self.time = time.time()
 				print(f"Pressure: {data.data}")
-				self.positioned_pressure = data.data > 12
+				self.positioned_pressure = data.data > 10
 				if not self.positioned_pressure:
+					print("going forward: pressure")
 					self.pub_z.publish(10)
 
 
