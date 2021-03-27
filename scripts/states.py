@@ -97,27 +97,37 @@ class PositionArmXY(State):
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 		time.sleep(2)
-		self.start_safety_monitoring()
+		# self.start_safety_monitoring()
 
 	def execute(self):
 		super().execute()
 		get_keypoint = rospy.ServiceProxy('get_keypoint', GetKeypoint)
 		resp = get_keypoint(self.location)
-		# TODO: convert image coordinates to centimeters
+		# If the keypoint is not found, move backwards
 		if resp.x == -999:
-			self.pub_z.publish(-1)
+			self.pub_z.publish(-10)
 			return self
-		print(-1 * resp.x)
-		print(-1 * resp.y)
+
+		print("x")
+		print(-1 * resp.x / 5)
+		print("y")
+		print(-1 * resp.y / 5)
+
+		# If centered, transition states
 		if abs(resp.x) < 28 and abs(resp.y) < 28:
 			print("centered")
 			if self.location == "hand":
 				self.pub_y.publish(-10)
 			return PositionArmZ(self.sensor)
-		# Range from -4 to 4
-		self.pub_x.publish(-1 * int(resp.x / 28))
-		self.pub_y.publish(-1 * int(resp.y / 28))
-		# TODO: only move to next state once centered
+
+		# Only move x if x is not centered
+		if abs(resp.x) >= 28:
+			self.pub_x.publish(-1 * int(resp.x /5))
+			time.sleep(0.5)
+		
+		# Move y
+		self.pub_y.publish(-1 * int(resp.y/5))
+		
 		time.sleep(1)
 		return self
 
@@ -128,6 +138,7 @@ class PositionArmZ(State):
 
 	def __init__(self, sensor):
 		super().__init__()
+		# self.stop_safety_monitoring()
 		self.sensor = sensor
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
 		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
@@ -136,7 +147,7 @@ class PositionArmZ(State):
 		self.sub_distance = rospy.Subscriber("distance", Float32, self.__distance_callback)
 		self.sub_pressure = rospy.Subscriber("pressure", Int16, self.__pressure_callback)
 		self.time = time.time()
-		self.stop_safety_monitoring()
+		
 
 	def execute(self):
 		super().execute()
@@ -149,7 +160,7 @@ class PositionArmZ(State):
 			return self
 	
 	def __distance_callback(self, data):
-		if time.time() - self.time > 1 and self.positioned is False:
+		if time.time() - self.time > 4 and self.positioned is False:
 			self.time = time.time()
 			print(f"Distance: {data.data} in")
 			if data.data <= self.distance:
@@ -158,17 +169,17 @@ class PositionArmZ(State):
 				print("close to chest")
 				self.positioned = True
 			else:
-				self.pub_z.publish(1)
+				self.pub_z.publish(40)
 				self.positioned = False	
 	
 	def __pressure_callback(self, data):
 		if self.sensor == "stethoscope" and self.positioned is True:
-			if time.time() - self.time > 1:
+			if time.time() - self.time > 4:
 				self.time = time.time()
 				print(f"Pressure: {data.data}")
 				self.positioned_pressure = data.data > 12
 				if not self.positioned_pressure:
-					self.pub_z.publish(1)
+					self.pub_z.publish(10)
 
 
 ####################################################
