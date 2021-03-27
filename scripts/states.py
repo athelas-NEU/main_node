@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from main_node.srv import GetKeypoint
-from std_msgs.msg import Int32, Float32, Bool, Int16, Float32MultiArray
+from std_msgs.msg import Int32, Float32, Bool, Int16, Float32MultiArray, String
 import time
 
 import queue
@@ -37,6 +37,8 @@ class State(object):
 	def __init__(self):
 		self.stop = False
 		print(f"Current state: {str(self)}")
+		pub_state = rospy.Publisher('current_state', String, queue_size=10)
+		pub_state.publish(str(self))
 
 	def execute(self):
 		if self.stop:
@@ -71,14 +73,25 @@ class Idle(State):
 	Waits for command, then transitions to PostionArm state.
 	"""
 
-	def execute(self):
-		super().execute()
+	def __init__(self):
+		super().__init__()
 		pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 
-		biosensor = input("Enter the biosensor name: ")
-		return PositionArmXY(biosensor)
+		self.sub_test = rospy.Subscriber("start_test", String, self.__input_callback)
+		self.biosensor = None
+		print("waiting for biosensor test input")
+	
+	def execute(self):
+		super().execute()
+		if self.biosensor:
+			return PositionArmXY(self.biosensor)
+		return self
+	
+	def __input_callback(self, data):
+		self.biosensor = data.data
+		print(self.biosensor)
 
 class PositionArmXY(State):
 	"""
