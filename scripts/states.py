@@ -56,13 +56,21 @@ class State(object):
 		return self.__class__.__name__
 	
 	def start_safety_monitoring(self):
-		self.sub_distance = rospy.Subscriber("distance", Float32, self.__safety_callback)
+		self.sub_distance = rospy.Subscriber("distance", Float32, self.__safety_distance_callback)
+		self.sub_pressure = rospy.Subscriber("distance", Float32, self.__safety_pressure_callback)
 
 	def stop_safety_monitoring(self):
 		self.sub_distance.unregister()
+		self.sub_pressure.unregister()
 
-	def __safety_callback(self, data):
+	def __safety_distance_callback(self, data):
 		if data.data > 470 or data.data < 2:
+			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+			pub_stop.publish(True)
+			self.stop = True 
+	
+	def __safety_pressure_callback(self, data):
+		if data.data > 4:
 			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
 			pub_stop.publish(True)
 			self.stop = True 
@@ -110,7 +118,7 @@ class PositionArmXY(State):
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 		time.sleep(2)
-		# self.start_safety_monitoring()
+		self.start_safety_monitoring()
 
 	def execute(self):
 		super().execute()
@@ -155,7 +163,7 @@ class PositionArmZ(State):
 
 	def __init__(self, sensor):
 		super().__init__()
-		# self.stop_safety_monitoring()
+		self.stop_safety_monitoring()
 		self.sensor = sensor
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
 		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
