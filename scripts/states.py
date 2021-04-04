@@ -57,7 +57,8 @@ class State(object):
 	
 	def start_safety_monitoring(self):
 		self.sub_distance = rospy.Subscriber("distance", Float32, self.__safety_distance_callback)
-		self.sub_pressure = rospy.Subscriber("distance", Float32, self.__safety_pressure_callback)
+		self.sub_pressure = rospy.Subscriber("pressure", Float32, self.__safety_pressure_callback)
+
 
 	def stop_safety_monitoring(self):
 		self.sub_distance.unregister()
@@ -70,7 +71,9 @@ class State(object):
 			self.stop = True 
 	
 	def __safety_pressure_callback(self, data):
+		print(data.data)
 		if data.data > 4:
+			print("safety pressure triggered")
 			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
 			pub_stop.publish(True)
 			self.stop = True 
@@ -83,12 +86,16 @@ class Idle(State):
 
 	def __init__(self):
 		super().__init__()
+		pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+		pub_stop.publish(False)
+		pub_stop.publish(False)
 		pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 
 		self.sub_test = rospy.Subscriber("start_test", String, self.__input_callback)
 		self.biosensor = None
+		pub_stop.publish(False)
 		print("waiting for biosensor test input")
 	
 	def execute(self):
@@ -114,6 +121,8 @@ class PositionArmXY(State):
 		self.pub_x = rospy.Publisher('arm_control/x', Int16, queue_size=10)
 		self.pub_y = rospy.Publisher('arm_control/y', Int16, queue_size=10)
 		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
+		pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+		pub_stop.publish(False)
 		pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
 		pub_reset.publish(True)
 		pub_reset.publish(True)
@@ -140,6 +149,7 @@ class PositionArmXY(State):
 			print("centered")
 			if self.location == "forehead":
 				self.pub_y.publish(50)
+			self.stop_safety_monitoring()
 			return PositionArmZ(self.sensor)
 
 		# Only move x if x is not centered
@@ -163,7 +173,6 @@ class PositionArmZ(State):
 
 	def __init__(self, sensor):
 		super().__init__()
-		self.stop_safety_monitoring()
 		self.sensor = sensor
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
 		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
@@ -253,6 +262,8 @@ class Stop(State):
 	def execute(self):
 		super().execute()
 		if self.reset:
+			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+			pub_stop.publish(False)
 			return Idle()
 		return self
 	
