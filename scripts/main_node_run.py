@@ -17,7 +17,7 @@ def main_loop():
       pass
     except SafetyException:
       state = Stop()
-    time.sleep(3)
+    time.sleep(0.5)
 
 
 if __name__ == "__main__":
