@@ -23,7 +23,7 @@ class State(object):
 	BIOSENSOR_MAP = {
 		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 10, "sample_rate":20.0, "sample_interval":125},
 		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 10, "sample_rate":20.0, "sample_interval":125},
-		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 6, "sample_rate":20.0, "sample_interval":125},
+		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 3, "sample_rate":20.0, "sample_interval":125},
 		"stethoscope": {"keypoint": "chest", "topic": "/biosensors/stethoscope", "distance": 0,"sample_rate": 44100.0, "sample_interval":200},
 	}
 
@@ -56,13 +56,24 @@ class State(object):
 		return self.__class__.__name__
 	
 	def start_safety_monitoring(self):
-		self.sub_distance = rospy.Subscriber("distance", Float32, self.__safety_callback)
+		self.sub_distance = rospy.Subscriber("distance", Float32, self.__safety_distance_callback)
+		self.sub_pressure = rospy.Subscriber("pressure", Float32, self.__safety_pressure_callback)
+
 
 	def stop_safety_monitoring(self):
 		self.sub_distance.unregister()
+		self.sub_pressure.unregister()
 
-	def __safety_callback(self, data):
-		if data.data > 470 or data.data < 2:
+	def __safety_distance_callback(self, data):
+		if data.data < 2:
+			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+			pub_stop.publish(True)
+			self.stop = True 
+	
+	def __safety_pressure_callback(self, data):
+		print(data.data)
+		if data.data > 4:
+			print("safety pressure triggered")
 			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
 			pub_stop.publish(True)
 			self.stop = True 
@@ -75,12 +86,16 @@ class Idle(State):
 
 	def __init__(self):
 		super().__init__()
+		pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+		pub_stop.publish(False)
+		pub_stop.publish(False)
 		pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 
 		self.sub_test = rospy.Subscriber("start_test", String, self.__input_callback)
 		self.biosensor = None
+		pub_stop.publish(False)
 		print("waiting for biosensor test input")
 	
 	def execute(self):
@@ -106,11 +121,13 @@ class PositionArmXY(State):
 		self.pub_x = rospy.Publisher('arm_control/x', Int16, queue_size=10)
 		self.pub_y = rospy.Publisher('arm_control/y', Int16, queue_size=10)
 		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
+		pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+		pub_stop.publish(False)
 		pub_reset = rospy.Publisher('arm_control/reset', Bool, queue_size=10)
 		pub_reset.publish(True)
 		pub_reset.publish(True)
 		time.sleep(2)
-		# self.start_safety_monitoring()
+		self.start_safety_monitoring()
 
 	def execute(self):
 		super().execute()
@@ -132,6 +149,7 @@ class PositionArmXY(State):
 			print("centered")
 			if self.location == "forehead":
 				self.pub_y.publish(50)
+			self.stop_safety_monitoring()
 			return PositionArmZ(self.sensor)
 
 		# Only move x if x is not centered
@@ -155,7 +173,6 @@ class PositionArmZ(State):
 
 	def __init__(self, sensor):
 		super().__init__()
-		# self.stop_safety_monitoring()
 		self.sensor = sensor
 		self.distance = self.BIOSENSOR_MAP[self.sensor]["distance"]
 		self.pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
@@ -200,7 +217,7 @@ class PositionArmZ(State):
 			if time.time() - self.time > 3:
 				self.time = time.time()
 				print(f"Pressure: {data.data}")
-				self.positioned_pressure = data.data > 10
+				self.positioned_pressure = data.data > 12
 				if not self.positioned_pressure:
 					print("going forward: pressure")
 					self.pub_z.publish(10)
@@ -245,6 +262,8 @@ class Stop(State):
 	def execute(self):
 		super().execute()
 		if self.reset:
+			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
+			pub_stop.publish(False)
 			return Idle()
 		return self
 	
