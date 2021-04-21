@@ -23,7 +23,7 @@ class State(object):
 	BIOSENSOR_MAP = {
 		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 10, "sample_rate":20.0, "sample_interval":125},
 		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 10, "sample_rate":20.0, "sample_interval":125},
-		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 4, "sample_rate":20.0, "sample_interval":125},
+		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 6, "sample_rate":20.0, "sample_interval":125},
 		"stethoscope": {"keypoint": "chest", "topic": "/biosensors/stethoscope", "distance": 0,"sample_rate": 44100.0, "sample_interval":200},
 	}
 
@@ -131,20 +131,21 @@ class PositionArmXY(State):
 		if abs(resp.x) < 28 and abs(resp.y) < 28:
 			print("centered")
 			if self.location == "forehead":
-				self.pub_y.publish(20)
+				self.pub_y.publish(50)
 			return PositionArmZ(self.sensor)
 
 		# Only move x if x is not centered
-		if abs(resp.x) >= 28:
+		if abs(resp.x) >= 28 and abs(resp.x) < 100:
 			if resp.x < 0:
-				self.pub_x.publish(5)
-			elif resp.x > 0:
 				self.pub_x.publish(-5)
+			elif resp.x > 0:
+				self.pub_x.publish(5)
 			time.sleep(0.5)
 		
 		# Move y
 		self.pub_y.publish(-1 * int(resp.y/5))
 		
+		time.sleep(3.5)
 		return self
 
 class PositionArmZ(State):
@@ -205,47 +206,6 @@ class PositionArmZ(State):
 					self.pub_z.publish(10)
 
 
-####################################################
-### BioData State Plotting helper functions ########
-####################################################
-
-def calculate_shift(data):
-	if type(data) == float:
-		return 1
-	else:
-		return len(data)
-
-def plot_callback(frame, state):
-	"""
-	Fields needed from BioData:
-		state.data_q
-		state.plotdata
-		state.lines
-	"""
-
-	while True:
-		try:
-			data_np = np.asarray(state.data_q.get_nowait())
-			data = np.expand_dims(data_np, axis=1)
-			# print_list(data)
-		except queue.Empty:
-			break
-
-		shift = calculate_shift(data)
-		state.plotdata = np.roll(state.plotdata, -shift, axis=0)
-		 # Elements that roll beyond the last position are re-introduced
-
-		# npdata = np.asarray(data)[0:shift]
-		state.plotdata[-shift:,:] = data
-
-	for column, line in enumerate(state.lines):
-		line.set_ydata(state.plotdata[:,column])
-
-	state.ax.autoscale_view(scalex=False, scaley=True)
-
-	return state.lines
-
-
 class BioData(State):
 	"""
 	Collect bio data for 15 seconds.
@@ -254,51 +214,13 @@ class BioData(State):
 	def __init__(self, sensor):
 		super().__init__()
 		self.sensor = sensor
-		topic = self.BIOSENSOR_MAP[self.sensor]["topic"]
 
 		print("in init")
 		self.start_time = time.time()
-		self.sub = rospy.Subscriber(f"{topic}", Float32MultiArray, self.__bio_callback)
-
-		### Begin pylot setup
-		window = 1000
-		self.downsample = 1
-
-		# this is update interval in miliseconds for plot (less than 30 crashes it :(
-		interval = self.BIOSENSOR_MAP[self.sensor]["sample_interval"]
-		samplerate = self.BIOSENSOR_MAP[self.sensor]["sample_rate"]
-		channels = [1]
-		length = int(window * samplerate / 1000 * self.downsample)
-
-		self.data_q = queue.Queue()
-
-		print("Sample Rate found: ", samplerate)
-
-		self.plotdata = np.zeros((length,len(channels)))
-		print("plotdata shape found: ", self.plotdata.shape)
-		self.fig, self.ax = plt.subplots(figsize=(8,4))
-
-		self.lines = self.ax.plot(self.plotdata, color = self.AXES_SETTINGS[self.sensor]["color"])
-
-		self.ax.set_title("Athelas: " + str(self.sensor) + " data")
-
-		self.ax.set_facecolor((0,0,0))
-		# self.ax.set_yticks([0])
-		self.ax.set_ylabel(self.AXES_SETTINGS[self.sensor]["ylabel"])
-		self.ax.tick_params(axis=u'y', which=u'major',length=0)
-
-		self.ax.set_ylim(self.AXES_SETTINGS[self.sensor]["ylim"])
-
-		self.ani = FuncAnimation(self.fig, plot_callback, fargs=(self,), interval=interval, blit=True)
-		plt.show() ## is blocking, state should end after
-
-		print("finished state init")
 
 	def execute(self):
 		super().execute()
 		if time.time() - self.start_time > 15:
-			self.sub.unregister()
-			plt.close(self.fig)
 			# Tell arm to reset
 			print("go back")
 			pub_z = rospy.Publisher('arm_control/z', Int16, queue_size=10)
@@ -312,11 +234,6 @@ class BioData(State):
 			return Idle()
 		else:
 			return self
-			
-	
-	def __bio_callback(self, data):
-		datalist = data.data
-		self.data_q.put(datalist)
 
 class Stop(State):
 

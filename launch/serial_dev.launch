@@ -2,7 +2,7 @@
 
 <!-- delay a node launch: -->
 <!-- <node name="listener" pkg="roscpp_tutorials" type="listener" launch-prefix="bash -c 'sleep $(arg node_start_delay); $0 $@' " /> -->
-
+    <include file="/opt/ros/melodic/share/rosbridge_server/launch/rosbridge_websocket.launch"/>
 
     <!-- <node pkg="pose_estimation" name="keypoint_srv" type="get_keypoint_service.py"/> -->
 
@@ -12,8 +12,8 @@
 
     <node pkg="rosserial_python" name="serial_USB1" type="serial_node.py" args="/dev/ttyUSB1"/>
 
-    <node pkg="steth_node" name="stethoscope" type="steth_publisher.py" args="-d 15"/>
-
     <node pkg="rosserial_python" name="serial_ACM0" type="serial_node.py" args="/dev/ttyACM0"/>
+
+    <node pkg="web_video_server" name="web_video_server" type="web_video_server"/>
 
 </launch>
