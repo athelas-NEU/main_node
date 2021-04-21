@@ -23,7 +23,7 @@ class State(object):
 	BIOSENSOR_MAP = {
 		"pulse": {"keypoint": "hand", "topic": "heart", "distance": 10, "sample_rate":20.0, "sample_interval":125},
 		"o2": {"keypoint": "hand", "topic": "spo2", "distance": 10, "sample_rate":20.0, "sample_interval":125},
-		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 6, "sample_rate":20.0, "sample_interval":125},
+		"temp": {"keypoint": "forehead", "topic": "temp", "distance": 3, "sample_rate":20.0, "sample_interval":125},
 		"stethoscope": {"keypoint": "chest", "topic": "/biosensors/stethoscope", "distance": 0,"sample_rate": 44100.0, "sample_interval":200},
 	}
 
@@ -65,7 +65,7 @@ class State(object):
 		self.sub_pressure.unregister()
 
 	def __safety_distance_callback(self, data):
-		if data.data > 470 or data.data < 2:
+		if data.data < 2:
 			pub_stop = rospy.Publisher('arm_control/stop', Bool, queue_size=10)
 			pub_stop.publish(True)
 			self.stop = True 
@@ -217,7 +217,7 @@ class PositionArmZ(State):
 			if time.time() - self.time > 3:
 				self.time = time.time()
 				print(f"Pressure: {data.data}")
-				self.positioned_pressure = data.data > 10
+				self.positioned_pressure = data.data > 12
 				if not self.positioned_pressure:
 					print("going forward: pressure")
 					self.pub_z.publish(10)
